@@ -3,20 +3,31 @@ import math
 
 
 class Polynomial:
-    def __init__(self, coefficients: tuple[int, ...] = (0,), degree: int = 0):
-        self.coefficients = coefficients
+    """
+    Implements polynomial logic.
+    Don't use this for anything other than implementing AKS.
+    """
 
-        if coefficients == (0,) and degree != 0:
-            self.coefficients = (0,) * degree
+    def __init__(self, coefficients: tuple[int, ...] = (0,)):
+        self.coefficients = coefficients
 
         self.degree = len(coefficients) - 1
 
     def multiply(self, other: Polynomial, r: int, modulus: int) -> Polynomial:
+        """
+        Calculates multiplication of the polynomial over the polynomial ring `S = (Z/nZ)[X]/(X^r - 1)`
+        """
         coefficients = [0] * r
         for degree, coefficient in enumerate(self.coefficients):
             if coefficient == 0:
                 continue
+
             for other_degree, other_coefficient in enumerate(other.coefficients):
+                """
+                Implementation detail:
+
+                Here, you don't need to calculate the polynomial remainder of `self` modulo `X^r - 1`, as you can substitute `X^r` to `1` and reduce the degree modulo `r`.
+                """
                 deg = (degree + other_degree) % r  # reducing polynomial modulo X^r - 1
                 coefficients[deg] += coefficient * other_coefficient
 
@@ -36,6 +47,9 @@ class Polynomial:
         )
 
     def pow(self, exponent: int, r: int) -> Polynomial:
+        """
+        Calculates the polynomial to the power of `exponent` in the polynomial ring `S = (Z/nZ)[X]/(X^r - 1)`
+        """
         modulus = exponent
 
         if exponent == 0:
@@ -55,6 +69,9 @@ class Polynomial:
         return output
 
     def reduce(self, degree: int) -> Polynomial:
+        """
+        Reduces the polynomial modulo X^degree - 1
+        """
         coefficients = [0] * degree
         for index, coefficient in enumerate(self.coefficients):
             coefficients[index % degree] += coefficient
@@ -66,8 +83,10 @@ class Polynomial:
 
 
 def phi(n: int):
+    """
+    Calculates Euler's totient function (or number of coprimes less than n) of n.
+    """
     # is it efficient? no. do i care? also no
-    # calculates euler's totient function'
     amount = 0
     for k in range(1, n):
         if math.gcd(n, k) == 1:
@@ -86,6 +105,9 @@ def is_power(n: int, base: int) -> bool:
 
 
 def check_power(n: int) -> bool:
+    """
+    Checks if n is a power of a number.
+    """
     for b in range(2, int(math.log2(n)) + 1):
         if is_power(n, b):
             return True
@@ -94,6 +116,9 @@ def check_power(n: int) -> bool:
 
 
 def find_r(n: int) -> int:
+    """
+    Finds the smallest r such that the multiplicative order of r is more than log2(n)^2.
+    """
     maxK = int(math.log2(n) ** 2)
 
     nextR = True
@@ -111,6 +136,9 @@ def find_r(n: int) -> int:
 
 
 def aks(n: int) -> bool:
+    """
+    Checks if n is a prime number.
+    """
     if check_power(n):
         return False
 
@@ -129,7 +157,7 @@ def aks(n: int) -> bool:
     for a in range(2, int(math.sqrt(phi(r)) * math.log2(n))):
         poly = Polynomial((a, 1))
 
-        if poly.pow(n, r) != Polynomial((a,) + (0,) * ((n - 1) % r) + (1,)).reduce(r):
+        if poly.pow(n, r) != Polynomial((a,) + (0,) * (n - 1) + (1,)).reduce(r):
             return False
 
     return True
