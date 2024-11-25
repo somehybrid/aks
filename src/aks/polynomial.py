@@ -1,6 +1,76 @@
 from __future__ import annotations
+from cmath import exp, pi
+import copy
 import itertools
-import math
+
+
+def fft(a: list[int]) -> list[complex]:
+    data: list[complex] = copy.copy(a)
+    omega = exp(2 * pi * 1j / len(data))
+    double_stride = 1
+
+    b = copy.copy(data)
+    while double_stride < len(data):
+        stride = double_stride
+        double_stride *= 2
+
+        half = len(data) // double_stride
+        power = 1
+
+        for i in range(half):
+            for start in range(stride):
+                b[start + stride * (2 * i)] = (
+                    data[start + stride * i] + data[start + stride * (i + half)]
+                )
+                b[start + stride * (2 * i + 1)] = (
+                    data[start + stride * i] - data[start + stride * (i + half)]
+                ) * power
+            power *= omega
+
+        data, b = b, data
+        omega *= omega
+
+    return data
+
+
+def pad(data: list[int], n: int) -> list[int]:
+    diff_length = n - len(data)
+    np2 = 1 << n.bit_length()
+    return data + [0] * diff_length + [0] * (np2 - n)
+
+
+def ifft(data: list[complex]) -> list[complex]:
+    data = data.copy()
+    double_stride = 1
+    b = data.copy()
+
+    omega = exp(2 * pi * 1j / len(data))
+
+    while double_stride < len(data):
+        stride = double_stride
+        double_stride *= 2
+
+        half = len(data) // double_stride
+        power = 1
+
+        for i in range(half):
+            for start in range(stride):
+                b[start + stride * (2 * i)] = (
+                    data[start + stride * i] + data[start + stride * (i + half)]
+                ) / 2
+                b[start + stride * (2 * i + 1)] = (
+                    data[start + stride * i] - data[start + stride * (i + half)]
+                ) / (2 * power)
+            power *= omega
+
+        data, b = b, data
+        omega *= omega
+
+    return data
+
+
+def to_int(data: list[complex]) -> list[int]:
+    return [int(round(x.real)) for x in data]
 
 
 class Polynomial:
@@ -13,7 +83,7 @@ class Polynomial:
         self.coefficients = coefficients
         self.degree = len(coefficients) - 1
 
-    def multiply(self, other: Polynomial, r: int, modulus: int) -> Polynomial:
+    def naive_multiply(self, other: Polynomial, r: int, modulus: int) -> Polynomial:
         """
         Calculates multiplication of the polynomial over the polynomial ring `S = (Z/nZ)[X]/(X^r - 1)`
         """
@@ -31,7 +101,7 @@ class Polynomial:
                 deg = (degree + other_degree) % r
                 coefficients[deg] += coefficient * other_coefficient
 
-                coefficients[degree] %= modulus
+                coefficients[deg] %= modulus
 
         return Polynomial(coefficients)
 
@@ -75,7 +145,7 @@ class Polynomial:
         m = (max(self.degree, other.degree) + 1) // 2
 
         if m <= 4:
-            return self.multiply(other, r, modulus)
+            return self.naive_multiply(other, r, modulus)
 
         low1 = Polynomial(self.coefficients[:m])
         high1 = Polynomial(self.coefficients[m:])
@@ -100,6 +170,33 @@ class Polynomial:
         result.strip_leading_zeros()
 
         return result
+
+    def fft_mul(self, other: Polynomial, r: int, modulus: int) -> Polynomial:
+        """
+        Calculates polynomial multiplication using the FFT algorithm
+        """
+        n = self.degree + other.degree + 1
+
+        fft_self = fft(pad(self.coefficients, n))
+        fft_other = fft(pad(other.coefficients, n))
+
+        out = [i * j for i, j in zip(fft_self, fft_other)]
+        out = to_int(ifft(out))
+
+        out = Polynomial(out)
+        out.strip_leading_zeros()
+        out = out.reduce(r)
+        out %= modulus
+
+        return out
+
+    def multiply(self, other: Polynomial, r: int, modulus: int) -> Polynomial:
+        if self.degree + other.degree <= 8:
+            return self.naive_multiply(other, r, modulus)
+        elif self.degree + other.degree <= 150:
+            return self.karatsuba(other, r, modulus)
+
+        return self.naive_multiply(other, r, modulus)
 
     def pow(self, exponent: int, r: int, modulus: int) -> Polynomial:
         """
@@ -171,90 +268,3 @@ class Polynomial:
                 )
             )
         )
-
-
-def phi(n: int):
-    """
-    Calculates Euler's totient function (or number of coprimes less than n) of n.
-    """
-    totient = n
-    for i in range(2, n):
-        if n % i == 0:
-            totient *= i - 1
-            totient /= i
-        while n % i == 0:
-            n //= i
-
-    return totient
-
-
-def is_power(n: int, base: int) -> bool:
-    for exponent in range(1, n):
-        if base**exponent == n:
-            return True
-        elif base**exponent > n:
-            return False
-
-    return False
-
-
-def check_power(n: int) -> bool:
-    """
-    Checks if n is a power of a number.
-    """
-    for b in range(2, int(math.log2(n)) + 1):
-        if is_power(n, b):
-            return True
-
-    return False
-
-
-def find_r(n: int) -> int:
-    """
-    Finds the smallest r such that the multiplicative order of r is more than log2(n)^2.
-    """
-    maxK = int(math.log2(n) ** 2)
-
-    nextR = True
-
-    r = 1
-    while nextR:
-        r += 1
-        nextR = False
-        k = 1
-        while k <= maxK and nextR is False:
-            k += 1
-            nextR = pow(n, k, r) in [1, 0]
-
-    return r
-
-
-def aks(n: int) -> bool:
-    """
-    Checks if n is a prime number.
-    """
-    if n < 31:
-        return n in [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
-
-    if check_power(n):
-        return False
-
-    r = find_r(n)
-
-    if math.gcd(n, r) != 1:
-        return False
-
-    if n <= r:
-        return True
-
-    for a in range(2, r):
-        if n % a == 0:
-            return False
-
-    for a in range(2, int(math.sqrt(phi(r)) * math.log2(n))):
-        poly = Polynomial([a, 1])
-
-        if poly.pow(n, r, n) != Polynomial([a % r] + [0] * (n - 1) + [1]).reduce(r):
-            return False
-
-    return True
