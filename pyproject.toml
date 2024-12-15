@@ -1,11 +1,3 @@
 [project]
 name = "aks"
 version = "0.1.0"
-
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "matplotlib",
-    "scipy",
-    "numpy",
-]

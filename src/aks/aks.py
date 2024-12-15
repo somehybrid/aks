@@ -143,6 +143,8 @@ def aks(n: int) -> bool:
         poly = Polynomial([a, 1])
 
         if poly.pow(n, r, n) != Polynomial([a % n] + [0] * (n - 1) + [1]).reduce(r):
+            print(r, n)
+            print(poly.pow(n, r, n))
             return False
 
     return True
