@@ -193,10 +193,10 @@ class Polynomial:
     def multiply(self, other: Polynomial, r: int, modulus: int) -> Polynomial:
         if self.degree + other.degree <= 8:
             return self.naive_multiply(other, r, modulus)
-        elif self.degree + other.degree <= 150:
+        elif self.degree + other.degree <= 100:
             return self.karatsuba(other, r, modulus)
 
-        return self.naive_multiply(other, r, modulus)
+        return self.fft_mul(other, r, modulus)
 
     def pow(self, exponent: int, r: int, modulus: int) -> Polynomial:
         """
@@ -211,8 +211,8 @@ class Polynomial:
         base = self
         while exponent > 0:
             if exponent % 2 == 1:
-                output = output.karatsuba(base, r, modulus)
-            base = base.karatsuba(base, r, modulus)
+                output = output.multiply(base, r, modulus)
+            base = base.multiply(base, r, modulus)
             exponent //= 2
 
         return output
